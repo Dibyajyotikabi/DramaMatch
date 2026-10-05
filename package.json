@@ -1,6 +1,6 @@
 {
   "name": "dramamatch",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev --hostname 0.0.0.0",
@@ -10,7 +10,9 @@
     "test": "tsx --test tests/*.test.ts",
     "format": "prettier --write app components lib scripts tests next.config.ts",
     "check:tmdb": "tsx scripts/check-tmdb.ts",
-    "mock:tmdb": "tsx tests/mock-tmdb.ts"
+    "mock:tmdb": "tsx tests/mock-tmdb.ts",
+    "clean": "node -e \"for (const d of ['.next','node_modules','tsconfig.tsbuildinfo']) require('fs').rmSync(d,{recursive:true,force:true})\"",
+    "fresh": "npm run clean && npm install"
   },
   "dependencies": {
     "@fontsource-variable/bricolage-grotesque": "^5.3.0",

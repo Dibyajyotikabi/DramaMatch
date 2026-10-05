@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
+import { version } from "./package.json";
 
 const config: NextConfig = {
   poweredByHeader: false,
+  env: { NEXT_PUBLIC_APP_VERSION: version },
   async headers() {
     return [
       {

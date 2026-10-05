@@ -56,6 +56,7 @@ interface Results {
 }
 
 const PAGE = 18;
+const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION ?? "dev";
 let nextId = 1;
 const msg = (m: Omit<Message, "id">): Message => ({ ...m, id: nextId++ });
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -953,6 +954,7 @@ export function App({ home }: { home: Home }) {
           Poster art and trailers belong to their owners. Not affiliated with
           IMDb.
         </p>
+        <p className="fine version">v{APP_VERSION}</p>
       </footer>
 
       {open && (

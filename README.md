@@ -1,5 +1,18 @@
 # DramaMatch
 
+> **Latest version: 2.0.0 (October 2026), on GitHub branch `claude/ecstatic-thompson-89f4l0`.**
+> This GitHub version is newer than older local copies and than the `main` branch, which still has the old drama site.
+> The app's footer shows its version, so you can compare: if yours doesn't say **v2.0.0**, update your local copy:
+>
+> ```sh
+> git fetch origin
+> git checkout claude/ecstatic-thompson-89f4l0
+> git pull
+> npm install
+> ```
+>
+> Your `.env.local` (API keys) is never uploaded to GitHub, so add your key again on each new computer (**Connect API** in the app, or see below).
+
 **What should I watch tonight?** Type how you feel, a star, or any movie or show. DramaMatch fixes typos, asks two quick questions (minimum rating and era) and lines up movies and series that fit.
 
 - **Every movie and series, live.** With a free TMDB key, search, Top 10, trending and genre rows, posters, cast, trailers and "More like this" all come from TMDB in real time.
@@ -7,6 +20,24 @@
 - **Understands people.** Moods ("I'm feeling low", "blow my mind"), stars ("srk", "nolan"), titles ("something like Naruto"), countries ("cozy k-drama", "bollywood"), eras ("90s"), ratings ("8+"), types ("series") and exclusions ("no romance").
 - **Forgives typos.** "sharukh khan", "intersteller", "romantik kdrama" and "horor" all work. The chat says "Did you mean…", and autocomplete corrects as you type.
 - A cinematic dark UI: a drifting poster wall, Top 10 and mood rows, poster cards, a detail view with trailer, cast and similar titles, My List (saved on the device), share links, Surprise me, and voice search in Chrome.
+
+## Clean start on your computer (recommended once)
+
+If you have an old copy, start fresh so no old files get in the way:
+
+1. **Keep your key (optional):** if your old folder has a `.env.local`, copy it somewhere safe.
+2. **Delete the old `DramaMatch` folder.**
+3. **Get the latest version:**
+   ```sh
+   git clone https://github.com/Dibyajyotikabi/DramaMatch.git
+   cd DramaMatch
+   git checkout claude/ecstatic-thompson-89f4l0
+   npm install
+   npm run dev -- --port 3100
+   ```
+4. Open http://localhost:3100, check that the footer says **v2.0.0**, click **Connect API**, paste your TMDB key and press **Test & save**. (Or put your saved `.env.local` back into the folder before step 3's `npm run dev`.)
+
+Already have the latest code but something seems stuck? `npm run fresh` deletes the build cache and `node_modules` and reinstalls. Your `.env.local` is kept.
 
 ## Run locally
 
