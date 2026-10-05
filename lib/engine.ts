@@ -908,6 +908,15 @@ export function interpret(
         .join("[^a-z0-9]+");
       corrected = corrected.replace(new RegExp(pattern, "i"), name);
     }
+    // Restore proper capitalisation for words that belong to a matched name or title.
+    const proper = new Map<string, string>();
+    for (const name of [...intent.people, ...intent.seeds.map((t) => t.title)])
+      for (const w of name.split(/[^A-Za-z0-9'’.-]+/))
+        if (w) proper.set(normalize(w), w);
+    corrected = corrected.replace(
+      /[A-Za-z0-9]+/g,
+      (w) => proper.get(w.toLowerCase()) ?? w,
+    );
     if (normalize(corrected) !== normalize(raw)) intent.corrected = corrected;
   }
   if (!intent.summary && intent.kind)
@@ -924,8 +933,49 @@ const jaccard = (a: string[], b: string[]) => {
   return inter / (a.length + b.length - inter);
 };
 
+/** Genres that define a story's world; sharing one matters more than sharing "Drama". */
+const DISTINCT_GENRES = new Set([
+  "Sci-Fi",
+  "Fantasy",
+  "Horror",
+  "Animation",
+  "Romance",
+  "Western",
+  "War",
+  "Music",
+  "Sport",
+]);
+
+const FRANCHISE_STOP = new Set([
+  "the",
+  "and",
+  "part",
+  "of",
+  "a",
+  "an",
+  "with",
+  "from",
+  "chapter",
+]);
+
+/** Distinctive title words ("batman", "potter"), used to keep franchises together. */
+const franchiseWords = (t: Title) =>
+  normalize(t.title.split(":")[0])
+    .split(" ")
+    .filter((w) => w.length >= 4 && !FRANCHISE_STOP.has(w) && !/^\d+$/.test(w));
+
 export function likeness(a: Title, b: Title) {
   let s = jaccard(a.genres, b.genres) * 0.34 + jaccard(a.tags, b.tags) * 0.38;
+  const distinct = a.genres.filter(
+    (g) => DISTINCT_GENRES.has(g) && b.genres.includes(g),
+  ).length;
+  s += Math.min(0.16, distinct * 0.08);
+  const words = franchiseWords(a);
+  if (words.length) {
+    const hay = ` ${normalize(`${b.title} ${b.blurb}`)} `;
+    const hits = words.filter((w) => hay.includes(` ${w} `)).length;
+    if (hits && hits >= Math.min(2, words.length)) s += 0.3;
+  }
   if (a.country === b.country) s += 0.1;
   if (a.kind === b.kind) s += 0.04;
   if (a.director && a.director === b.director) s += 0.12;
