@@ -142,7 +142,7 @@ const MOODS: Mood[] = [
     genres: { Comedy: 1 },
   },
   {
-    re: /\b(romantic|romance|romances|in love|love story|love stories|date night|crush|butterflies|romcom|romcoms|rom com|rom coms|valentine|valentines|first love|swoon|kiss)\b/,
+    re: /\b(romantic|romance|romances|in love|love story|love stories|date night|crush|butterflies|romcom|romcoms|rom com|rom coms|valentine|valentines|first love|swoon|kiss|date|girlfriend|boyfriend|partner|bae|wife|husband|anniversary)\b/,
     label: "romance",
     tags: { romantic: 1.3 },
     genres: { Romance: 1 },
@@ -364,7 +364,16 @@ interface Index {
   people: Map<string, string>; // normalized full name -> canonical
   tokens: Map<string, Set<string>>; // name token -> canonical names
   credits: Map<string, number>;
+  /** Known words -> weight; anything else is a candidate typo. */
+  vocab: Map<string, number>;
+  byLength: Map<number, string[]>;
 }
+
+/** Everyday words people type that should never be "corrected". */
+const COMMON_WORDS =
+  "about after again also always another away back because been before best better between big both bring call came come could cool day days did does done down each even ever every everything few find first friend fun girl give going gone good great guy guys hard have help here high home hour hours into just keep kind know last late least leave left less light little live long look lost lot lots made make many maybe mean might more most much must name need never next nice night none nothing once only open other over own part people place play pretty put quite rather read real right same say see seen side since soon start still story such sure take tell than thank thanks their them then there they thing things think though through today together too true try turn under until upon used wait watched week weekend well went were when where while whole why wish woman women work world year years yes yet vibe vibes episode watchlist someone wanna gonna kinda gimme pls hey hello hi lol tonite kdrama kdramas cdrama cdramas jdrama jdramas kmovie kmovies scifi romcom romcoms anime bollywood tollywood date wife husband boyfriend girlfriend partner mom dad mother father brother sister son daughter baby alone myself bed couch weekend evening morning sunday saturday friday holiday christmas summer winter rain cold hot short long hours minutes english hindi subtitles dubbed netflix prime disney hulu".split(
+    " ",
+  );
 
 const indexCache = new WeakMap<Title[], Index>();
 
@@ -393,9 +402,119 @@ function buildIndex(list: Title[]): Index {
       }
     }
   }
-  const index = { titles, people, tokens, credits };
+  const vocab = new Map<string, number>();
+  const add = (w: string, weight: number) => {
+    if (w.length < 2 || /\d/.test(w)) return;
+    vocab.set(w, Math.max(vocab.get(w) ?? 0, weight));
+  };
+  for (const w of [...COMMON_WORDS, ...STOP]) add(w, 1);
+  for (const w of Object.keys(NEGATABLE)) add(w, 3);
+  for (const m of MOODS)
+    for (const w of m.re.source.split(/[^a-z]+/)) if (w.length >= 3) add(w, 4);
+  for (const c of COUNTRIES)
+    for (const w of c.re.source.split(/[^a-z]+/)) if (w.length >= 3) add(w, 4);
+  for (const a of Object.keys(ALIASES)) for (const w of a.split(" ")) add(w, 3);
+  for (const { key, title } of titles)
+    for (const w of key.split(" ")) add(w, 2 + Math.log10(title.votes + 1));
+  for (const [n, name] of people)
+    for (const w of n.split(" ")) add(w, 2 + (credits.get(name) ?? 1) / 4);
+  const byLength = new Map<number, string[]>();
+  for (const w of vocab.keys()) {
+    if (!byLength.has(w.length)) byLength.set(w.length, []);
+    byLength.get(w.length)!.push(w);
+  }
+  const index = { titles, people, tokens, credits, vocab, byLength };
   indexCache.set(list, index);
   return index;
+}
+
+/* ───────────────────────────── Spelling ───────────────────────────── */
+
+/** Optimal-string-alignment distance (Levenshtein + transpositions), capped at max + 1. */
+export function editDistance(a: string, b: string, max = 3) {
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  const rows: number[][] = [];
+  for (let i = 0; i <= a.length; i++) {
+    rows.push([i]);
+    let best = i;
+    for (let j = 1; j <= b.length; j++) {
+      if (i === 0) {
+        rows[0][j] = j;
+        continue;
+      }
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      let v = Math.min(
+        rows[i - 1][j] + 1,
+        rows[i][j - 1] + 1,
+        rows[i - 1][j - 1] + cost,
+      );
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1])
+        v = Math.min(v, rows[i - 2][j - 2] + 1);
+      rows[i][j] = v;
+      if (v < best) best = v;
+    }
+    if (i > 0 && best > max) return max + 1;
+  }
+  return rows[a.length][b.length];
+}
+
+function isSubsequence(a: string, b: string) {
+  let i = 0;
+  for (const ch of b) if (ch === a[i]) i++;
+  return i === a.length;
+}
+
+function closestWord(word: string, index: Index): string | null {
+  const max = word.length >= 8 ? 2 : 1;
+  let best: string | null = null;
+  let bestScore = Infinity;
+  for (let len = word.length - max; len <= word.length + max; len++) {
+    for (const w of index.byLength.get(len) ?? []) {
+      const d = editDistance(word, w, max);
+      if (d > max) continue;
+      // Lower is better: distance first, then dropped/doubled letters, same first
+      // letter, and more meaningful words.
+      const score =
+        d * 10 -
+        (isSubsequence(word, w) || isSubsequence(w, word) ? 4 : 0) -
+        (w[0] === word[0] ? 3 : 0) -
+        Math.min(4, index.vocab.get(w) ?? 0);
+      if (score < bestScore) {
+        bestScore = score;
+        best = w;
+      }
+    }
+  }
+  return best;
+}
+
+/** Fix likely typos word by word ("romantik", "intersteller", "dicapro"). */
+export function correctWords(text: string, list: Title[] = defaultCatalog) {
+  const index = buildIndex(list);
+  const fixes: [string, string][] = [];
+  const words = text.split(" ").map((w) => {
+    if (w.length < 4 || /\d/.test(w) || index.vocab.has(w)) return w;
+    const fix = closestWord(w, index);
+    if (!fix) return w;
+    fixes.push([w, fix]);
+    return fix;
+  });
+  return { text: words.join(" "), fixes };
+}
+
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** Rewrites the user's original wording with corrections applied, for "Did you mean…". */
+function applyFixes(raw: string, fixes: [string, string][]) {
+  let out = raw;
+  for (const [from, to] of fixes) {
+    const pattern = from.split(" ").map(escapeRe).join("[^a-z0-9]+");
+    out = out.replace(
+      new RegExp(`(^|[^a-z0-9])${pattern}(?=$|[^a-z0-9])`, "i"),
+      (_m, pre) => pre + to,
+    );
+  }
+  return out;
 }
 
 /* ───────────────────────────── Interpretation ───────────────────────────── */
@@ -436,6 +555,7 @@ export function interpret(
 ): Intent {
   const index = buildIndex(list);
   const raw = query.trim().slice(0, 200);
+  const fixes: [string, string][] = [];
   let text = normalize(raw);
   const intent: Intent = {
     query: raw,
@@ -451,6 +571,12 @@ export function interpret(
     understood: false,
   };
   const labels: string[] = [];
+  {
+    // Spelling: fix unknown words before anything else reads the query.
+    const c = correctWords(text, list);
+    text = c.text;
+    fixes.push(...c.fixes);
+  }
   const strip = (phrase: string) => {
     text = ` ${text} `.replace(` ${phrase} `, " ").replace(/\s+/g, " ").trim();
   };
@@ -588,6 +714,49 @@ export function interpret(
     }
   }
 
+  // Fuzzy multi-word names and titles ("shah ruk khan", "crash landing on yu").
+  if (!intent.people.length && !intent.seeds.length) {
+    const words = text.split(" ").filter(Boolean).slice(0, 14);
+    let best: {
+      score: number;
+      phrase: string;
+      person?: string;
+      title?: Title;
+    } = {
+      score: 0,
+      phrase: "",
+    };
+    for (let size = Math.min(6, words.length); size >= 2; size--) {
+      for (let i = 0; i + size <= words.length; i++) {
+        const phrase = words.slice(i, i + size).join(" ");
+        if (phrase.length < 7) continue;
+        for (const [n, name] of index.people) {
+          if (Math.abs(n.split(" ").length - size) > 1) continue;
+          const sc = similarity(phrase, n);
+          if (sc > best.score) best = { score: sc, phrase, person: name };
+        }
+        for (const { key, title } of index.titles) {
+          if (key.length < 7 || Math.abs(key.split(" ").length - size) > 1)
+            continue;
+          const sc = similarity(phrase, key);
+          if (sc > best.score) best = { score: sc, phrase, title };
+        }
+      }
+    }
+    if (best.score >= 0.8) {
+      if (best.person) {
+        intent.people.push(best.person);
+        if (normalize(best.person) !== best.phrase)
+          fixes.push([best.phrase, best.person]);
+      } else if (best.title) {
+        intent.seeds.push(best.title);
+        if (normalize(best.title.title) !== best.phrase)
+          fixes.push([best.phrase, best.title.title]);
+      }
+      strip(best.phrase);
+    }
+  }
+
   // Surname / first-name only ("nolan", "dicaprio", "miyazaki").
   if (!intent.people.length) {
     for (const tok of text.split(" ")) {
@@ -654,15 +823,20 @@ export function interpret(
           const s = similarity(phrase, key);
           if (s > best.score) best = { score: s, title };
         }
-        if (best.title && best.score >= 0.72) intent.seeds.push(best.title);
-        else {
+        if (best.title && best.score >= 0.72) {
+          intent.seeds.push(best.title);
+          fixes.push([phrase, best.title.title]);
+        } else {
           // Fuzzy person names.
           let bp = { score: 0, name: "" };
           for (const [n, name] of index.people) {
             const s = similarity(phrase, n);
             if (s > bp.score) bp = { score: s, name };
           }
-          if (bp.score >= 0.78) intent.people.push(bp.name);
+          if (bp.score >= 0.78) {
+            intent.people.push(bp.name);
+            fixes.push([phrase, bp.name]);
+          }
         }
       }
       if (!intent.seeds.length && !intent.people.length)
@@ -700,6 +874,20 @@ export function interpret(
     intent.kind,
   );
   intent.summary = parts.join(" · ");
+  if (fixes.length) {
+    let corrected = applyFixes(raw, fixes);
+    for (const name of [
+      ...intent.people,
+      ...intent.seeds.map((t) => t.title),
+    ]) {
+      const pattern = normalize(name)
+        .split(" ")
+        .map(escapeRe)
+        .join("[^a-z0-9]+");
+      corrected = corrected.replace(new RegExp(pattern, "i"), name);
+    }
+    if (normalize(corrected) !== normalize(raw)) intent.corrected = corrected;
+  }
   if (!intent.summary && intent.kind)
     intent.summary = intent.kind === "series" ? "great series" : "great movies";
   return intent;
@@ -883,6 +1071,9 @@ export interface Suggestion {
   label: string;
   detail: string;
   value: string;
+  /** True when this is a typo-tolerant guess rather than a literal match. */
+  fuzzy?: boolean;
+  id?: string;
 }
 
 export const MOOD_SUGGESTIONS = [
@@ -912,39 +1103,75 @@ export function suggest(
   const q = normalize(query);
   if (q.length < 2) return [];
   const index = buildIndex(list);
-  const out: (Suggestion & { rank: number })[] = [];
-  const seen = new Set<string>();
-  for (const { key, title } of index.titles) {
-    if (seen.has(title.id)) continue;
-    const pos = key.indexOf(q);
-    if (pos === -1) continue;
-    const wordStart = pos === 0 || key[pos - 1] === " ";
-    if (!wordStart) continue;
-    seen.add(title.id);
-    out.push({
+  const out = new Map<string, Suggestion & { rank: number }>();
+  const push = (key: string, s: Suggestion & { rank: number }) => {
+    const prev = out.get(key);
+    if (!prev || prev.rank < s.rank) out.set(key, s);
+  };
+  const titleItem = (t: Title, rank: number, fuzzy = false) =>
+    push(`t:${t.id}`, {
       type: "title",
-      label: title.title,
-      detail: `${title.kind === "movie" ? "Movie" : "Series"} · ${title.year} · ★ ${title.rating.toFixed(1)}`,
-      value: title.title,
-      rank: (pos === 0 ? 3 : 2) + Math.log10(title.votes + 1) / 4,
+      label: t.title,
+      detail: `${t.kind === "movie" ? "Movie" : "Series"} · ${t.year} · ★ ${t.rating.toFixed(1)}`,
+      value: t.title,
+      id: t.id,
+      fuzzy,
+      rank: rank + Math.log10(t.votes + 1) / 4,
     });
-  }
-  for (const [n, name] of index.people) {
-    const pos = n.indexOf(q);
-    if (pos === -1 || (pos > 0 && n[pos - 1] !== " ")) continue;
+  const personItem = (name: string, rank: number, fuzzy = false) => {
     const credits = index.credits.get(name) ?? 1;
-    out.push({
+    push(`p:${name}`, {
       type: "person",
       label: name,
       detail: `${credits} ${credits === 1 ? "title" : "titles"}`,
       value: name,
-      rank: (pos === 0 ? 2.9 : 1.9) + credits / 10,
+      fuzzy,
+      rank: rank + Math.min(credits, 10) / 10,
     });
+  };
+
+  const literal = (text: string, fuzzy: boolean) => {
+    for (const { key, title } of index.titles) {
+      const pos = key.indexOf(text);
+      if (pos === -1 || (pos > 0 && key[pos - 1] !== " ")) continue;
+      titleItem(title, (pos === 0 ? 3 : 2) - (fuzzy ? 0.6 : 0), fuzzy);
+    }
+    for (const [n, name] of index.people) {
+      const pos = n.indexOf(text);
+      if (pos === -1 || (pos > 0 && n[pos - 1] !== " ")) continue;
+      personItem(name, (pos === 0 ? 2.9 : 1.9) - (fuzzy ? 0.6 : 0), fuzzy);
+    }
+  };
+  literal(q, false);
+
+  // Typo tolerance: correct finished words, then compare against prefixes of names.
+  if (q.length >= 3) {
+    const words = q.split(" ");
+    const last = words.pop()!;
+    const fixed = correctWords(words.join(" "), list).text;
+    const corrected = [fixed, last].filter(Boolean).join(" ");
+    if (corrected !== q) literal(corrected, true);
+    if (out.size < limit) {
+      const qc = q.replace(/ /g, "");
+      const score = (key: string) => {
+        const head = key.replace(/ /g, "").slice(0, qc.length + 1);
+        return Math.max(similarity(q, key), similarity(qc, head) - 0.05);
+      };
+      for (const { key, title } of index.titles) {
+        const sc = score(key);
+        if (sc >= 0.62) titleItem(title, sc * 2.2, true);
+      }
+      for (const [n, name] of index.people) {
+        const sc = score(n);
+        if (sc >= 0.62) personItem(name, sc * 2.1, true);
+      }
+    }
   }
+
   for (const m of MOOD_SUGGESTIONS) {
     const n = normalize(m.label + " " + m.value);
     if (n.includes(q))
-      out.push({
+      push(`m:${m.label}`, {
         type: "mood",
         label: `${m.emoji} ${m.label}`,
         detail: "Mood",
@@ -952,7 +1179,7 @@ export function suggest(
         rank: 1.5,
       });
   }
-  return out
+  return [...out.values()]
     .sort((a, b) => b.rank - a.rank)
     .slice(0, limit)
     .map(({ rank: _rank, ...s }) => s);
@@ -964,4 +1191,18 @@ export function defaultFilters(intent: Intent): Filters {
     era: intent.era ?? "any",
     kind: (intent.kind as Kind | undefined) ?? "any",
   };
+}
+
+/** "More like this" for a single title. */
+export function similarTo(
+  t: Title,
+  n = 12,
+  list: Title[] = defaultCatalog,
+): Title[] {
+  return list
+    .filter((x) => x.id !== t.id)
+    .map((x) => ({ x, s: likeness(t, x) + quality(x) * 0.35 }))
+    .sort((a, b) => b.s - a.s || a.x.id.localeCompare(b.x.id))
+    .slice(0, n)
+    .map((r) => r.x);
 }

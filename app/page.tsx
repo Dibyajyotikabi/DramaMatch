@@ -1,5 +1,5 @@
-import { Matcher } from "@/components/matcher";
+import { App } from "@/components/app";
 
 export default function Home() {
-  return <Matcher />;
+  return <App />;
 }

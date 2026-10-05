@@ -44,6 +44,8 @@ export interface Intent {
   minRating?: number;
   era?: string;
   terms: string[];
+  /** The query with typos fixed, when we changed anything ("Did you mean…"). */
+  corrected?: string;
   /** Human-readable summary of what we understood, e.g. "something comforting". */
   summary: string;
   understood: boolean;

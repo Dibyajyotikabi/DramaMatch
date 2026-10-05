@@ -520,3 +520,6 @@ export const catalog: Title[] = rows.map(
     blurb,
   }),
 );
+
+const byId = new Map(catalog.map((t) => [t.id, t]));
+export const titleById = (id: string) => byId.get(id);
