@@ -1,177 +1,119 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
-import { dramas } from "../lib/data/catalog";
-import { validateCatalog } from "../lib/data/validate";
-import { excluded, recommend } from "../lib/recommendation/engine";
-import {
-  parseQuery,
-  preferencesURL,
-  readPreferences,
-  avoidOptions,
-} from "../lib/search/parse";
-import { searchCatalog } from "../lib/search/engine";
-import { collectionFor, collectionPaths } from "../lib/seo/collections";
-import type { Preferences } from "../lib/types";
-const base: Preferences = { wanted: [], avoid: [] };
-test("catalog has complete, unique, valid records and local posters", () => {
-  validateCatalog(dramas);
-  assert.ok(dramas.length >= 8);
-  for (const d of dramas)
-    assert.ok(existsSync(`public${d.poster}`), `Missing poster: ${d.slug}`);
-});
-test("recommendations are deterministic, bounded, unique and exclude the seed", () => {
-  const p = { ...base, seed: "hidden-love" };
-  const a = recommend(dramas, p);
-  assert.deepEqual(a, recommend([...dramas].reverse(), p));
-  assert.ok(a.length >= 5 && a.length <= 10);
-  assert.ok(
-    a.every(
-      (m) => m.drama.slug !== "hidden-love" && m.score >= 0 && m.score <= 100,
-    ),
-  );
-  assert.equal(new Set(a.map((m) => m.drama.id)).size, a.length);
-});
-test("gentle youth romances outrank revenge thrillers for Hidden Love", () => {
-  const all = recommend(
-    dramas,
-    {
-      seed: "hidden-love",
-      wanted: ["Romance", "Youth", "Green flag"],
-      mood: "Comfort me",
-      avoid: [],
-    },
-    10,
-  );
-  assert.ok(
-    all.slice(0, 3).some((m) => m.drama.slug === "when-i-fly-towards-you"),
-  );
-  assert.ok(!all.slice(0, 3).some((m) => m.drama.slug === "the-glory"));
-});
-test("every hard exclusion holds, including in combination", () => {
-  for (const avoid of [...avoidOptions.map((v) => [v]), avoidOptions]) {
-    const results = recommend(dramas, { ...base, avoid }, 10);
-    assert.ok(results.every((m) => !excluded(m.drama, avoid)));
+import { test } from "node:test";
+import { catalog } from "../lib/catalog";
+import { defaultFilters, interpret, recommend, suggest } from "../lib/engine";
+
+const run = (q: string) => {
+  const intent = interpret(q);
+  return { intent, picks: recommend(intent, defaultFilters(intent)) };
+};
+
+test("catalog rows are well-formed and unique", () => {
+  const ids = new Set<string>();
+  for (const t of catalog) {
+    assert.ok(!ids.has(t.id), `duplicate ${t.id}`);
+    ids.add(t.id);
+    assert.ok(t.rating > 0 && t.rating <= 10, t.title);
+    assert.ok(t.year > 1900 && t.year < 2030, t.title);
+    assert.ok(t.genres.length && t.tags.length && t.blurb, t.title);
   }
+  assert.ok(catalog.length >= 400);
 });
-test("sad ending exclusion requires confirmed happy endings", () => {
-  const d = dramas[0];
-  for (const ending of ["sad", "open", "unknown", "bittersweet"] as const)
-    assert.equal(
-      excluded({ ...d, dna: { ...d.dna, ending } }, ["Sad ending"]),
-      true,
-    );
-});
-test("country filters never leak titles from another country", () => {
-  for (const country of ["KR", "CN"] as const)
-    assert.ok(
-      recommend(dramas, { ...base, country }, 10).every(
-        (m) => m.drama.country === country,
-      ),
-    );
-});
-test("no eligible titles produces empty state instead of relaxing exclusions", () => {
-  assert.deepEqual(
-    recommend([dramas.find((d) => d.slug === "the-glory")!], {
-      ...base,
-      avoid: ["Toxic leads"],
-    }),
-    [],
-  );
-});
-test("free text extracts seed-compatible preferences and negative constraints", () => {
-  const p = parseQuery(
-    "something like Business Proposal without a love triangle",
-  );
-  assert.ok(p.avoid?.includes("Love triangle"));
-  const results = recommend(dramas, { ...base, ...p } as Preferences);
+
+test("moods map to fitting titles", () => {
+  const { intent, picks } = run("I'm feeling sad");
+  assert.equal(intent.summary, "something comforting");
   assert.ok(
-    results.every(
-      (m) =>
-        m.drama.slug !== "business-proposal" &&
-        m.drama.dna.loveTriangle === "none",
+    picks
+      .slice(0, 10)
+      .every((p) => p.title.tags.some((t) => ["feelgood", "cozy"].includes(t))),
+  );
+
+  const scary = run("something scary").picks.slice(0, 8);
+  assert.ok(
+    scary.every(
+      (p) =>
+        p.title.tags.includes("scary") || p.title.genres.includes("Horror"),
     ),
   );
-  assert.equal(parseQuery("romantic K-drama with happy ending").country, "KR");
-  assert.ok(parseQuery("no fantasy").avoid?.includes("Fantasy"));
-  assert.ok(!parseQuery("no fantasy").wanted?.includes("Fantasy"));
 });
-test("parameter validation rejects unknown preference values", () => {
-  const p = readPreferences(
-    new URLSearchParams(
-      "country=XX&wanted=Romance,evil&avoid=Fantasy,other&mood=wrong",
-    ),
+
+test("star names rank their own titles first", () => {
+  const { intent, picks } = run("Shah Rukh Khan");
+  assert.deepEqual(intent.people, ["Shah Rukh Khan"]);
+  assert.ok(
+    picks.slice(0, 5).every((p) => p.title.cast.includes("Shah Rukh Khan")),
   );
-  assert.deepEqual(p.wanted, ["Romance"]);
-  assert.deepEqual(p.avoid, ["Fantasy"]);
-  assert.equal(p.country, undefined);
-  assert.equal(p.mood, undefined);
+  assert.deepEqual(interpret("srk").people, ["Shah Rukh Khan"]);
+  assert.deepEqual(interpret("nolan").people, ["Christopher Nolan"]);
 });
-test("refinement round-trips selections, including explicit cleared filters", () => {
-  const p: Preferences = {
-    query: "happy ending",
-    wanted: [],
-    avoid: [],
-    mood: "Comfort me",
-    country: "CN",
-    seed: "hidden-love",
-  };
-  assert.deepEqual(readPreferences(new URLSearchParams(preferencesURL(p))), p);
+
+test("titles become seeds and are excluded from results", () => {
+  const { intent, picks } = run("movies like Inception");
+  assert.equal(intent.seeds[0].title, "Inception");
+  assert.equal(intent.kind, "movie");
+  assert.ok(!picks.some((p) => p.title.title === "Inception"));
+  assert.ok(
+    picks.slice(0, 5).some((p) => p.title.director === "Christopher Nolan"),
+  );
 });
-test("search covers titles, movies, people, genres, tropes and original titles", () => {
-  for (const [q, group] of [
-    ["Hidden Love", "Dramas"],
-    ["Zhao Lusi", "Actresses"],
-    ["Chen Zheyuan", "Actors"],
-    ["romance", "Genres"],
-    ["xianxia", "Tropes"],
-    ["20th Century Girl", "Movies"],
-    ["偷偷藏不住", "Dramas"],
-  ])
-    assert.ok(searchCatalog(dramas, q).some((r) => r.group === group));
-  assert.deepEqual(searchCatalog(dramas, "nonesuch"), []);
-});
-test("performer searches favor their actual credits", () => {
+
+test("typos still find the title", () => {
+  assert.equal(interpret("intersteller").seeds[0]?.title, "Interstellar");
   assert.equal(
-    recommend(dramas, { ...base, query: "Zhao Lusi" })[0].drama.slug,
-    "hidden-love",
+    interpret("shawshank").seeds[0]?.title,
+    "The Shawshank Redemption",
   );
 });
-test("scores reconcile with the public weighted explanation", () => {
-  for (const m of recommend(dramas, {
-    ...base,
-    seed: "hidden-love",
-    wanted: ["Romance"],
-    mood: "Comfort me",
-  })) {
-    assert.equal(
-      m.breakdown.reduce((sum, b) => sum + b.weight, 0),
-      100,
-    );
-    assert.equal(
-      m.score,
-      Math.round(m.breakdown.reduce((sum, b) => sum + b.score * b.weight, 0)),
-    );
-    assert.ok(m.matched <= m.total);
-    assert.ok(m.reasons.length > 0);
+
+test("country, era, rating and kind hints become filters", () => {
+  const { intent, picks } = run("best korean thriller series from the 2010s");
+  assert.deepEqual(intent.countries, ["KR"]);
+  assert.equal(intent.kind, "series");
+  assert.equal(intent.era, "2010s");
+  assert.equal(intent.minRating, 8);
+  for (const p of picks) {
+    assert.equal(p.title.country, "KR");
+    assert.equal(p.title.kind, "series");
+    assert.ok(p.title.year >= 2010 && p.title.year <= 2019);
+    assert.ok(p.title.rating >= 8);
   }
 });
-test("all generated collection paths resolve and unknown categories 404", () => {
-  for (const p of collectionPaths(dramas))
-    assert.ok(collectionFor(p.category, p.slug, dramas));
-  assert.equal(collectionFor("unrecognized", "romance", dramas), null);
+
+test("negations exclude genres", () => {
+  const { intent, picks } = run("something cozy, no romance");
+  assert.deepEqual(intent.excludeGenres, ["Romance"]);
+  assert.ok(picks.length > 0);
+  assert.ok(!picks.some((p) => p.title.genres.includes("Romance")));
 });
-test("weak alternatives are not added just to reach a quota", () => {
-  const result = recommend(
-    dramas,
-    {
-      seed: "hidden-love",
-      wanted: ["Romance", "Green flag", "Youth"],
-      mood: "Comfort me",
-      avoid: ["Sad ending", "Love triangle"],
-    },
-    9,
-  );
-  assert.ok(result.every((m) => m.score >= 50));
-  assert.ok(!result.some((m) => m.drama.slug === "reset"));
+
+test("common-word titles only match when typed alone", () => {
+  assert.equal(interpret("her").seeds[0]?.title, "Her");
+  assert.equal(interpret("I want to watch with friends").seeds.length, 0);
+});
+
+test("filters are honoured", () => {
+  const intent = interpret("funny");
+  const picks = recommend(intent, {
+    minRating: 8,
+    era: "1990s",
+    kind: "movie",
+  });
+  assert.ok(picks.length > 0);
+  for (const p of picks) {
+    assert.ok(
+      p.title.rating >= 8 && p.title.year >= 1990 && p.title.year <= 1999,
+    );
+    assert.equal(p.title.kind, "movie");
+  }
+});
+
+test("gibberish yields no results instead of random filler", () => {
+  assert.equal(run("zxqvw").picks.length, 0);
+});
+
+test("autocomplete returns titles and people", () => {
+  const labels = suggest("shah").map((s) => s.label);
+  assert.ok(labels.includes("Shah Rukh Khan"));
+  assert.equal(suggest("incep")[0].label, "Inception");
 });

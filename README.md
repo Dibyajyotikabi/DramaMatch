@@ -1,124 +1,62 @@
 # DramaMatch
 
-A responsive K-drama and C-drama discovery app. Search a title, performer, genre, trope, or a short request; answer three visual questions; get explainable recommendations without an LLM or an account.
+**What should I watch tonight?** Type how you feel, a star you love, or a movie you can't stop thinking about. DramaMatch asks two quick questions (minimum IMDb rating and release era), then suggests movies and series that fit.
+
+- One big, Google-style search box with instant autocomplete (titles and people) and voice input in Chrome.
+- Understands moods ("I'm feeling low", "need a good cry", "blow my mind"), stars ("Shah Rukh Khan", "srk", "nolan"), titles ("movies like Inception", typo-tolerant: "intersteller"), countries ("cozy k-drama", "bollywood"), eras ("90s", "recent"), ratings ("8+", "best"), types ("series", "movies") and exclusions ("no romance", "nothing scary").
+- 450+ hand-picked titles across Hollywood, Bollywood and South Indian cinema, K-dramas, C-dramas, anime and world cinema.
+- Every pick explains why it was chosen, with Trailer and IMDb links.
+- Runs entirely in the browser after the first load: no API keys, no database, no sign-up, no tracking. Light and dark themes, works on mobile.
 
 ## Run locally
 
-Requires Node.js 20.9+ (Node 22 recommended).
+Requires Node.js 20.9+.
 
 ```sh
-npm ci
-cp .env.example .env.local
-npm run dev
+npm install
+npm run dev          # http://localhost:3000
 ```
 
-Open http://localhost:3000. If that port is occupied, use `npm run dev -- --port 3100`.
+Production build:
+
+```sh
+npm run build
+npm start            # http://localhost:3000
+```
+
+Checks:
 
 ```sh
 npm run typecheck
 npm test
-npm run build
-npm start -- --port 3100
-# In another terminal, with the production server running:
-npm run test:http
 ```
 
-If a restricted local environment blocks Turbopack worker sockets, use `npm run build -- --webpack`; both bundlers are supported.
+## Deploy
 
-The seed provider works immediately without credentials. Set `NEXT_PUBLIC_SITE_URL` to the final HTTPS origin before a deployment/build so canonicals, sitemap URLs, and structured data use the correct host. Deploy to any Next.js-compatible Node host; the application is not a static export because search and personalized results run on the server.
+It's a standard Next.js app with a single statically rendered page, so it deploys as-is to Vercel, Netlify or any Node host. Set `NEXT_PUBLIC_SITE_URL` to your public URL so social previews use the right host.
 
-## Product
+## How it works
 
-- Warm editorial homepage, system-aware light/dark theme, local watchlist.
-- 150 ms debounced universal search; aborts stale requests, caches the last 50 queries, supports arrows, Enter, and Escape.
-- Grouped drama/movie/actor/actress/genre/trope suggestions and a free-text fallback.
-- Three steps only: wants, mood, exclusions. Back and refinement preserve selections.
-- Server-calculated match scores, nine results when eligible, expandable explanations with all six weighted contributions.
-- More like this, Not for me with Undo, Refine, and Save.
-- Drama detail pages with cast links, trope links, DNA, content notes, and an ending disclosure control.
-- Similar-drama pages with original intros, specific shared-story reasons, comparisons, related collections, and a quiz CTA.
-- All requested country, actor/actress, trope, mood, and genre routes.
-- 16 curated seed titles, including all eight requested dramas and two films.
-
-## Architecture
-
-| Module | Responsibility |
+| File | What it does |
 | --- | --- |
-| `lib/types.ts` | Vendor-neutral Drama, DNA, preferences, and match contracts |
-| `lib/data/` | Curated catalog and import validation |
-| `lib/providers/` | Server-only metadata boundary; seed provider and optional TMDB import helper |
-| `lib/search/` | Search index logic, rule-based request parsing, URL validation |
-| `lib/recommendation/engine.ts` | Pure deterministic ranking, independent of React and providers |
-| `lib/seo/` | Metadata, curated collections, indexability |
-| `components/` | Small interactive islands and reusable editorial UI |
-| `app/` | App Router server pages, handlers, sitemap, robots, OG image |
-| `database/migrations/` | PostgreSQL/Supabase schema, indexes, and RLS policies |
-| `scripts/seed.ts` | Validated, transaction-wrapped SQL seed export |
-| `tests/` | Behavior tests for ranking, exclusions, search, parsing, and catalog integrity |
+| `lib/catalog.ts` | The curated catalog, one compact row per title |
+| `lib/engine.ts` | Reads a query (moods, people, titles, hints), ranks titles and builds the "why" line |
+| `components/matcher.tsx` | The search box, chat flow and results UI |
+| `app/` | Layout, page and global styles |
+| `tests/engine.test.ts` | Behaviour tests for the engine and catalog |
 
-The provider implements `DramaProvider.list`, `bySlug`, and `search`. Replace the provider in `lib/providers/index.ts` to use PostgreSQL or another source. The scorer accepts plain domain objects and never imports vendor SDKs. The optional TMDB helper only fetches raw metadata server-side; it is an import boundary, not a complete live catalog adapter. TMDB does not provide DramaDNA, so records must be enriched and reviewed before publishing. No secrets are passed to browser components.
+Ranking combines how well a title matches what you asked for (shared cast or director, likeness to a title you named, mood tags and genres) with its IMDb rating and popularity. Rating, era and type are hard filters. If nothing matches, the app says so instead of padding the list.
 
-## Matching rules
+### Adding titles
 
-The percentage is the rounded weighted sum of normalized 0–1 signals. It is a **preference fit score**, not a predicted enjoyment probability.
+Add a row to `lib/catalog.ts`:
 
-| Signal | Weight |
-| --- | ---: |
-| Seed story / performer / query similarity | 30% |
-| Wanted attributes | 30% |
-| Mood | 15% |
-| Genre | 10% |
-| Ending compatibility | 10% |
-| Editorial quality / sample popularity | 5% |
-
-Title similarity combines seven DNA axes (55%), genres (25%), tropes (15%), and pacing (5%). Wanted numeric traits match proportionally; tags match exactly. Performer matches prefer actual catalog credits. With no seed, neutral prior values are used and the quiz drives ranking. Ordering is stable, with rating then slug breaking ties. The seed title itself is excluded. Matches below 50% are omitted so unrelated stories do not fill a quota.
-
-Hard exclusions run **before** ranking and are never silently relaxed:
-
-- Sad ending: only confirmed happy endings remain; unknown/open/bittersweet are also removed.
-- Love triangle: only `none`; even `mild` is removed.
-- Toxic leads: toxicity must be at most 3/10.
-- Slow pacing: slow titles removed.
-- Breakups: removes editorial `Separation` themes or `Second chance` tropes. This is a conservative tag-based approximation, not exhaustive scene annotation.
-- Fantasy: fantasy genre removed.
-
-Country restrictions are hard filters. A narrow combination can return fewer than five titles or a helpful empty state. No unrelated titles are added to fill a quota. The parser supports the example requests and common English patterns; it is deliberately rule based and is not a general language understanding system. Arbitrary unmatched requests fall back to quiz preferences.
-
-## Database and adding titles
-
-The default MVP does not require or connect to a database. The migration is PostgreSQL/Supabase-ready, with normalized cast and DNA tables, external IDs, search indexes, publication gating, and read-only public RLS. Apply migrations once, in filename order, as a database owner/migration role.
-
-```sh
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/migrations/001_initial.sql
-npm run --silent seed:sql > /tmp/dramamatch-seed.sql
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f /tmp/dramamatch-seed.sql
+```ts
+["Title", 2024, 8.1, 120, "m", "Drama|Romance", "KR", "Director", "Lead One|Lead Two", "romantic|cozy", "One-line pitch."],
 ```
 
-The seed export does not connect to a database or print credentials. Existing records are preserved by `ON CONFLICT DO NOTHING`; future editorial updates should use a deliberate migration/upsert. Supabase roles and table grants are environment-specific; public writes are not permitted by the supplied policies. Keep service keys in server-only environment variables.
+The fields are: year, IMDb rating, IMDb votes in thousands, `m`(ovie) or `s`(eries), genres, country code, director or creator, cast, mood tags and a short blurb. Mood tags come from `TAG_LABELS` in `lib/engine.ts`. Run `npm test` afterwards.
 
-To add titles:
+## Data notes
 
-1. Add a normalized record in `lib/data/catalog.ts`, with complete DNA and reviewed spoiler-safe notes.
-2. Add an authorized local poster under `public/posters/`, or configure an allowed image origin.
-3. Run tests and build. Route generation, search, person pages, collections, and SQL export pick it up automatically.
-4. Rebuild/redeploy after seed edits. For a database-backed catalog, add a provider-level cache and invalidation on editorial publish.
-
-## Performance and accessibility
-
-Server components and static generation are used for editorial routes. Search and recommendation handlers return CDN cache headers; the browser also caches repeat searches. Next Image provides responsive WebP/AVIF optimization, intrinsic layout reservation, and lazy loading; the leading detail/result poster is prioritized. Local system typography avoids font requests and layout shifts. There are no component frameworks, vendor UI SDKs, animation packages, autoplay media, tracking scripts, authentication, or LLM dependencies.
-
-Semantic controls, visible focus states, a skip link, labeled combobox, keyboard search, pressed-state choices, live status messages, native disclosure widgets, reduced-motion support, and responsive table scrolling are included. Saves persist on this browser only; storage failures are handled.
-
-## SEO
-
-Titles and similar-drama pages are pre-rendered with descriptive metadata, canonical URLs, Open Graph, and valid TVSeries/Movie or ItemList structured data. Editorial ratings are not misrepresented as audience aggregate ratings. Detail pages link to performers, genres, tropes, and similar stories.
-
-Only collection pages with at least three actual titles are included in the sitemap and eligible for indexing; sparse performer/filter pages remain accessible but carry `noindex, follow`. Personalized results, quiz, and local saved pages are also noindex. Search/query combinations are not generated into indexable pages. The robots file permits crawling those pages so crawlers can see their noindex directives, while API routes are disallowed.
-
-## Data and image provenance
-
-DNA, popularity, and rating values are **editorial prototype assessments**, not live or licensed audience statistics. Original synopsis copy was written for this app. Credits/year/episode counts use public series information. Production catalog publication should include editorial review, especially for content sensitivities and ending classifications.
-
-Ten low-resolution promotional posters were sourced from the corresponding English Wikipedia pages and Wikimedia-hosted files. See `public/posters/SOURCES.md` for exact sources. Those posters remain copyrighted by their respective owners; this development project does not grant redistribution rights. Obtain appropriate poster rights or replace them before public commercial deployment. Six additional entries use original SVG illustrated editions, explicitly labeled on the artwork.
-
-The schema is supplied but was not applied to a live database in this workspace. Hosting, custom domain, and production credentials are not configured automatically.
+Ratings and vote counts are an IMDb snapshot and won't update live. Blurbs are original one-liners written for this app. DramaMatch isn't affiliated with IMDb; the IMDb button just opens an IMDb search for the title.

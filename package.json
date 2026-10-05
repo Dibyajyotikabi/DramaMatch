@@ -8,23 +8,18 @@
     "start": "next start --hostname 0.0.0.0",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
-    "seed:sql": "tsx scripts/seed.ts",
-    "format": "prettier --write app components lib scripts tests next.config.ts",
-    "test:http": "node --test tests/http-smoke.mjs"
+    "format": "prettier --write app components lib tests next.config.ts"
   },
   "dependencies": {
     "next": "^16.1.6",
     "react": "^19.2.4",
-    "react-dom": "^19.2.4",
-    "server-only": "^0.0.1"
+    "react-dom": "^19.2.4"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.2.1",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "prettier": "3.9.6",
-    "tailwindcss": "^4.2.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.0"
   }

@@ -1,68 +1,56 @@
-export type Country = "KR" | "CN";
-export type Ending = "happy" | "bittersweet" | "sad" | "open" | "unknown";
-export interface Person {
-  name: string;
-  slug: string;
-  kind: "actor" | "actress";
-}
-export interface DramaDNA {
-  romance: number;
-  chemistry: number;
-  comedy: number;
-  angst: number;
-  action: number;
-  mystery: number;
-  pace: "slow" | "medium" | "fast";
-  ending: Ending;
-  loveTriangle: "none" | "mild" | "heavy";
-  leadType: string[];
-  setting: string[];
-  tropes: string[];
-  moods: string[];
-  themes: string[];
-  toxicity: number;
-  spoilerSafeNotes: string;
-}
-export interface Drama {
+export type Kind = "movie" | "series";
+
+export interface Title {
   id: string;
-  slug: string;
   title: string;
-  originalTitle: string;
-  country: Country;
-  type: "tv" | "movie";
   year: number;
-  synopsis: string;
-  poster: string;
-  genres: string[];
-  actors: Person[];
-  episodeCount: number;
+  /** IMDb user rating (0–10), snapshot at catalog time. */
   rating: number;
-  popularity: number;
-  dna: DramaDNA;
-  color: string;
-}
-export interface Preferences {
-  seed?: string;
-  query?: string;
-  country?: Country;
-  wanted: string[];
-  mood?: string;
-  avoid: string[];
-}
-export interface Match {
-  drama: Drama;
-  score: number;
-  reasons: string[];
+  /** Approximate IMDb vote count, in thousands. Used as a popularity signal. */
+  votes: number;
+  kind: Kind;
+  genres: string[];
+  country: string;
+  /** Director (movies) or creator/showrunner (series). May be empty. */
+  director: string;
+  cast: string[];
   tags: string[];
-  breakdown: { label: string; score: number; weight: number }[];
-  matched: number;
-  total: number;
+  blurb: string;
 }
-export interface SearchResult {
+
+export interface Era {
   id: string;
   label: string;
-  group: "Dramas" | "Movies" | "Actors" | "Actresses" | "Genres" | "Tropes";
-  subtitle: string;
-  slug: string;
-  poster?: string;
+  from: number;
+  to: number;
+}
+
+export interface Filters {
+  minRating: number;
+  era: string;
+  kind: Kind | "any";
+}
+
+export interface Intent {
+  query: string;
+  seeds: Title[];
+  people: string[];
+  tags: Record<string, number>;
+  genres: Record<string, number>;
+  excludeGenres: string[];
+  excludeTags: string[];
+  countries: string[];
+  kind?: Kind;
+  minRating?: number;
+  era?: string;
+  terms: string[];
+  /** Human-readable summary of what we understood, e.g. "something comforting". */
+  summary: string;
+  understood: boolean;
+}
+
+export interface Pick {
+  title: Title;
+  score: number;
+  reason: string;
 }

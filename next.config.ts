@@ -1,10 +1,7 @@
 import type { NextConfig } from "next";
+
 const config: NextConfig = {
   poweredByHeader: false,
-  images: {
-    formats: ["image/avif", "image/webp"],
-    remotePatterns: [{ protocol: "https", hostname: "upload.wikimedia.org" }],
-  },
   async headers() {
     return [
       {
@@ -15,11 +12,12 @@ const config: NextConfig = {
           { key: "X-Frame-Options", value: "DENY" },
           {
             key: "Permissions-Policy",
-            value: "camera=(), microphone=(), geolocation=()",
+            value: "camera=(), microphone=(self), geolocation=()",
           },
         ],
       },
     ];
   },
 };
+
 export default config;
