@@ -567,6 +567,7 @@ export function interpret(
     excludeTags: [],
     countries: [],
     terms: [],
+    rest: "",
     summary: "",
     understood: false,
   };
@@ -798,6 +799,27 @@ export function interpret(
       intent.countries.push(...c.codes);
       if (!(anime && c.label === "Japanese")) countryLabels.push(c.label);
     }
+  }
+
+  // Whatever is left once moods, places and filler are removed: probably a
+  // title or a name we don't know locally (the live catalog can look it up).
+  {
+    let rest = text;
+    for (const r of [...MOODS.map((m) => m.re), ...COUNTRIES.map((c) => c.re)])
+      rest = rest.replace(new RegExp(r.source, "g"), " ");
+    rest = rest
+      .replace(
+        /\b(movies?|films?|series|shows?|tv|cinema|flicks?|seasons?|episodes?)\b/g,
+        " ",
+      )
+      .replace(
+        /\b(similar to|same as|fan of|like|loved|liked|enjoyed|starring|with|by|from|the \d0s|\d0s|\d{4}s?)\b/g,
+        " ",
+      );
+    intent.rest = rest
+      .split(" ")
+      .filter((w) => w && !STOP.has(w) && !COMMON_WORDS.includes(w))
+      .join(" ");
   }
 
   // Loose title match when nothing else was understood ("shawshank", "intersteller").
@@ -1183,6 +1205,13 @@ export function suggest(
     .sort((a, b) => b.rank - a.rank)
     .slice(0, limit)
     .map(({ rank: _rank, ...s }) => s);
+}
+
+/** Mood/genre labels the engine recognised, for summaries built elsewhere. */
+export function moodLabels(intent: Intent) {
+  return intent.summary
+    .split(" · ")
+    .filter((p) => p && !p.startsWith("like ") && !p.startsWith("with "));
 }
 
 export function defaultFilters(intent: Intent): Filters {

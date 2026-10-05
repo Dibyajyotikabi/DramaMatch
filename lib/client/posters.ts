@@ -88,14 +88,16 @@ export function getPoster(id: string): Promise<string | null> {
   });
 }
 
-export function usePoster(id: string) {
+export function usePoster(id: string, enabled = true) {
   const [url, setUrl] = useState<string | null | undefined>(undefined);
   useEffect(() => {
+    if (!enabled || !/^[a-z0-9-]+$/.test(id) || /^(movie|tv)-\d+$/.test(id))
+      return;
     let alive = true;
     getPoster(id).then((u) => alive && setUrl(u));
     return () => {
       alive = false;
     };
-  }, [id]);
+  }, [id, enabled]);
   return url;
 }

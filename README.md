@@ -1,12 +1,12 @@
 # DramaMatch
 
-**What should I watch tonight?** Type how you feel, a star you love, or a movie you can't stop thinking about. DramaMatch asks two quick questions (minimum IMDb rating and release era), then suggests movies and series that fit.
+**What should I watch tonight?** Type how you feel, a star, or any movie or show. DramaMatch fixes typos, asks two quick questions (minimum rating and era) and lines up movies and series that fit.
 
-- One big, Google-style search box with instant autocomplete (titles and people) and voice input in Chrome.
-- Understands moods ("I'm feeling low", "need a good cry", "blow my mind"), stars ("Shah Rukh Khan", "srk", "nolan"), titles ("movies like Inception", typo-tolerant: "intersteller"), countries ("cozy k-drama", "bollywood"), eras ("90s", "recent"), ratings ("8+", "best"), types ("series", "movies") and exclusions ("no romance", "nothing scary").
-- 450+ hand-picked titles across Hollywood, Bollywood and South Indian cinema, K-dramas, C-dramas, anime and world cinema.
-- Every pick explains why it was chosen, with Trailer and IMDb links.
-- Runs entirely in the browser after the first load: no API keys, no database, no sign-up, no tracking. Light and dark themes, works on mobile.
+- **Every movie and series, live.** With a free TMDB key, search, Top 10, trending and genre rows, posters, cast, trailers and "More like this" all come from TMDB in real time.
+- **Works with no setup.** Without a key, the app runs on a built-in catalog of 450+ hand-picked titles with IMDb ratings. It also falls back to that catalog automatically if TMDB is unreachable.
+- **Understands people.** Moods ("I'm feeling low", "blow my mind"), stars ("srk", "nolan"), titles ("something like Naruto"), countries ("cozy k-drama", "bollywood"), eras ("90s"), ratings ("8+"), types ("series") and exclusions ("no romance").
+- **Forgives typos.** "sharukh khan", "intersteller", "romantik kdrama" and "horor" all work. The chat says "Did you mean…", and autocomplete corrects as you type.
+- A cinematic dark UI: a drifting poster wall, Top 10 and mood rows, poster cards, a detail view with trailer, cast and similar titles, My List (saved on the device), share links, Surprise me, and voice search in Chrome.
 
 ## Run locally
 
@@ -14,49 +14,64 @@ Requires Node.js 20.9+.
 
 ```sh
 npm install
-npm run dev          # http://localhost:3000
+cp .env.example .env.local   # then paste your TMDB key (see below)
+npm run dev                  # http://localhost:3000
 ```
 
-Production build:
+If port 3000 is busy: `npm run dev -- --port 3100`.
 
-```sh
-npm run build
-npm start            # http://localhost:3000
-```
+### Turn on live data (2 minutes, free)
 
-Checks:
+1. Create a free account at [themoviedb.org](https://www.themoviedb.org/signup).
+2. Go to **Settings → API**, request an API key (choose "Developer"), and copy the **API Key**.
+3. Put it in `.env.local`:
+   ```
+   TMDB_API_KEY=your_key_here
+   ```
+4. Check it with `npm run check:tmdb`, then restart `npm run dev`.
+
+Optional: add `OMDB_API_KEY` (free at [omdbapi.com](https://www.omdbapi.com/apikey.aspx)) to show the real IMDb rating on title pages. Live lists and filters use TMDB's audience rating, which is labelled "TMDB".
+
+Never commit `.env.local`, and never use a key you didn't create. Keys found in other people's repositories get revoked.
+
+## Deploy (Vercel)
+
+1. Push this repo to GitHub and import it at [vercel.com/new](https://vercel.com/new).
+2. Under **Environment Variables** add `TMDB_API_KEY` (and `OMDB_API_KEY` if you have one) and `NEXT_PUBLIC_SITE_URL` (your final URL).
+3. Deploy. Home rows refresh every 6 hours; searches are cached at the edge.
+
+Any Node host that runs Next.js works too: `npm run build && npm start`.
+
+TMDB's terms require the attribution shown in the footer whenever live data is on. TMDB's API is free for non-commercial use; if you make money from the app, check [TMDB's API terms](https://www.themoviedb.org/api-terms-of-use) for commercial licensing.
+
+## Checks
 
 ```sh
 npm run typecheck
-npm test
+npm test            # engine, typo correction, and the full live path against a mock TMDB
+npm run build
 ```
 
-## Deploy
+`npm run mock:tmdb` starts a local stand-in for TMDB (port 4010). It lets you try live mode without a key:
 
-It's a standard Next.js app with a single statically rendered page, so it deploys as-is to Vercel, Netlify or any Node host. Set `NEXT_PUBLIC_SITE_URL` to your public URL so social previews use the right host.
+```sh
+TMDB_API_KEY=test TMDB_API_BASE=http://localhost:4010/3 TMDB_IMAGE_BASE=http://localhost:4010/img npm run dev
+```
 
 ## How it works
 
 | File | What it does |
 | --- | --- |
-| `lib/catalog.ts` | The curated catalog, one compact row per title |
-| `lib/engine.ts` | Reads a query (moods, people, titles, hints), ranks titles and builds the "why" line |
-| `components/matcher.tsx` | The search box, chat flow and results UI |
-| `app/` | Layout, page and global styles |
-| `tests/engine.test.ts` | Behaviour tests for the engine and catalog |
+| `lib/engine.ts` | Reads a query (moods, people, titles, places, eras, ratings, exclusions), fixes typos, and ranks catalog titles |
+| `lib/tmdb.ts` | TMDB client: requests, caching, genre mapping, conversion into the app's title format |
+| `lib/live.ts` | Turns a reading of the query into TMDB calls (discover, search, credits, recommendations) and ranks the results |
+| `lib/service.ts` | Single entry point: live when a key is set, catalog otherwise or on failure |
+| `lib/catalog.ts` | The built-in catalog, one row per title |
+| `app/api/*` | `search`, `suggest`, `title` (details) and `posters` endpoints |
+| `components/` | Search box, chat flow, rows, cards, detail view |
 
-Ranking combines how well a title matches what you asked for (shared cast or director, likeness to a title you named, mood tags and genres) with its IMDb rating and popularity. Rating, era and type are hard filters. If nothing matches, the app says so instead of padding the list.
-
-### Adding titles
-
-Add a row to `lib/catalog.ts`:
-
-```ts
-["Title", 2024, 8.1, 120, "m", "Drama|Romance", "KR", "Director", "Lead One|Lead Two", "romantic|cozy", "One-line pitch."],
-```
-
-The fields are: year, IMDb rating, IMDb votes in thousands, `m`(ovie) or `s`(eries), genres, country code, director or creator, cast, mood tags and a short blurb. Mood tags come from `TAG_LABELS` in `lib/engine.ts`. Run `npm test` afterwards.
+API keys stay on the server; the browser only talks to the app's own `/api` routes.
 
 ## Data notes
 
-Ratings and vote counts are an IMDb snapshot and won't update live. Blurbs are original one-liners written for this app. DramaMatch isn't affiliated with IMDb; the IMDb button just opens an IMDb search for the title.
+Catalog ratings are an IMDb snapshot and don't update. Live ratings come from TMDB and update continuously. Poster art and trailers belong to their owners. DramaMatch isn't affiliated with IMDb or TMDB.

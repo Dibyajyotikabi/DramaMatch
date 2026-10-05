@@ -1,6 +1,7 @@
 export type Kind = "movie" | "series";
 
 export interface Title {
+  /** Catalog slug, or "movie-123" / "tv-123" for live TMDB titles. */
   id: string;
   title: string;
   year: number;
@@ -16,6 +17,18 @@ export interface Title {
   cast: string[];
   tags: string[];
   blurb: string;
+  /** Live titles carry their own artwork and rating source. */
+  poster?: string;
+  backdrop?: string;
+  ratingSource?: "IMDb" | "TMDB";
+}
+
+export interface TitleDetails extends Title {
+  imdbId?: string;
+  imdbRating?: number;
+  trailer?: string;
+  runtime?: string;
+  similar: Title[];
 }
 
 export interface Era {
@@ -44,6 +57,8 @@ export interface Intent {
   minRating?: number;
   era?: string;
   terms: string[];
+  /** Words not explained by moods, places or filler: a likely title or name. */
+  rest: string;
   /** The query with typos fixed, when we changed anything ("Did you mean…"). */
   corrected?: string;
   /** Human-readable summary of what we understood, e.g. "something comforting". */

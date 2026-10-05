@@ -12,7 +12,7 @@ interface Props {
   onSeeAll?: () => void;
   saved: (id: string) => boolean;
   onOpen: (t: Title) => void;
-  onToggle: (id: string) => void;
+  onToggle: (t: Title) => void;
 }
 
 export function Row({

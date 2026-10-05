@@ -31,6 +31,7 @@ const PLACEHOLDERS = [
 ];
 
 interface Props {
+  live?: boolean;
   value: string;
   onChange: (v: string) => void;
   onSubmit: (v: string) => void;
@@ -51,8 +52,36 @@ interface SpeechRecognitionLike {
   start: () => void;
 }
 
+type Item = Suggestion & { image?: string };
+
+/** Live title/person suggestions from the server, debounced. */
+function useRemote(q: string, enabled: boolean) {
+  const [state, setState] = useState<{ q: string; list: Item[] }>({
+    q: "",
+    list: [],
+  });
+  useEffect(() => {
+    const text = q.trim();
+    if (!enabled || text.length < 2) return;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => {
+      fetch(`/api/suggest?q=${encodeURIComponent(text)}`, {
+        signal: ctrl.signal,
+      })
+        .then((r) => (r.ok ? r.json() : { suggestions: [] }))
+        .then((d) => setState({ q: text, list: d.suggestions ?? [] }))
+        .catch(() => {});
+    }, 140);
+    return () => {
+      clearTimeout(timer);
+      ctrl.abort();
+    };
+  }, [q, enabled]);
+  return state.q === q.trim() ? state.list : [];
+}
+
 export const SearchBox = forwardRef<SearchBoxHandle, Props>(function SearchBox(
-  { value, onChange, onSubmit },
+  { live = false, value, onChange, onSubmit },
   ref,
 ) {
   const input = useRef<HTMLInputElement>(null);
@@ -64,14 +93,31 @@ export const SearchBox = forwardRef<SearchBoxHandle, Props>(function SearchBox(
 
   useImperativeHandle(ref, () => ({ focus: () => input.current?.focus() }));
 
-  const items = useMemo(
-    () => (focused ? suggest(value, undefined, 7) : []),
-    [value, focused],
-  );
+  const remote = useRemote(value, live && focused);
+  const items = useMemo<Item[]>(() => {
+    if (!focused) return [];
+    const local: Item[] = suggest(value, undefined, 7);
+    if (!remote.length) return local;
+    // Literal local hits first, then live results, then typo guesses and moods.
+    const order = [
+      ...local.filter((x) => !x.fuzzy && x.type !== "mood"),
+      ...remote,
+      ...local.filter((x) => x.fuzzy),
+      ...local.filter((x) => x.type === "mood"),
+    ];
+    const seen = new Set<string>();
+    return order
+      .filter((s) => {
+        const k = `${s.type}:${s.label.toLowerCase()}`;
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      })
+      .slice(0, 8);
+  }, [value, focused, remote]);
   const open = focused && items.length > 0;
-  const anyFuzzy =
-    items.some((s) => s.fuzzy) &&
-    !items.some((s) => !s.fuzzy && s.type !== "mood");
+  const onlyGuesses =
+    items.length > 0 && items.every((s) => s.fuzzy || s.type === "mood");
 
   useEffect(() => setActive(-1), [value]);
   useEffect(() => {
@@ -86,7 +132,7 @@ export const SearchBox = forwardRef<SearchBoxHandle, Props>(function SearchBox(
     setSpeech(Boolean(w.SpeechRecognition || w.webkitSpeechRecognition));
   }, []);
 
-  const choose = (s: Suggestion) => {
+  const choose = (s: Item) => {
     onChange(s.value);
     setFocused(false);
     input.current?.blur();
@@ -201,12 +247,12 @@ export const SearchBox = forwardRef<SearchBoxHandle, Props>(function SearchBox(
 
       {open && (
         <div className="suggest" id="search-suggestions" role="listbox">
-          {anyFuzzy && <p className="suggest-hint">Did you mean…</p>}
+          {onlyGuesses && <p className="suggest-hint">Did you mean…</p>}
           {items.map((s, i) => {
             const t = s.id ? titleById(s.id) : undefined;
             return (
               <div
-                key={`${s.type}-${s.label}`}
+                key={`${s.type}-${s.label}-${i}`}
                 id={`sg-${i}`}
                 role="option"
                 aria-selected={i === active}
@@ -217,7 +263,16 @@ export const SearchBox = forwardRef<SearchBoxHandle, Props>(function SearchBox(
                 }}
                 onMouseEnter={() => setActive(i)}
               >
-                {t ? (
+                {s.image ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    className={`suggest-img ${s.type}`}
+                    src={s.image}
+                    alt=""
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : t ? (
                   <Poster title={t} className="thumb" />
                 ) : (
                   <span className={`suggest-icon ${s.type}`} aria-hidden>
@@ -231,7 +286,9 @@ export const SearchBox = forwardRef<SearchBoxHandle, Props>(function SearchBox(
                 <span className="suggest-text">
                   <span className="suggest-label">{s.label}</span>
                   <span className="suggest-detail">
-                    {s.type === "person" ? `Star · ${s.detail}` : s.detail}
+                    {s.type === "person" && !s.image
+                      ? `Star · ${s.detail}`
+                      : s.detail}
                   </span>
                 </span>
               </div>

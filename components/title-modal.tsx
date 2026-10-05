@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   IconCheck,
   IconClose,
@@ -12,23 +12,64 @@ import {
 } from "./icons";
 import { Poster } from "./poster";
 import { TitleCard } from "./title-card";
+import { titleById } from "@/lib/catalog";
 import { similarTo, TAG_LABELS } from "@/lib/engine";
 import {
-  COUNTRY_SHORT,
-  FLAGS,
+  countryName,
+  flag,
   hueFor,
   imdbURL,
   kindLabel,
   trailerURL,
 } from "@/lib/format";
 import { usePoster } from "@/lib/client/posters";
-import type { Title } from "@/lib/types";
+import type { Title, TitleDetails } from "@/lib/types";
+
+const cache = new Map<string, TitleDetails>();
+
+/** Full details: computed locally for catalog titles, fetched for live ones. */
+function useDetails(t: Title): TitleDetails | null {
+  const local = titleById(t.id);
+  const [live, setLive] = useState<TitleDetails | null>(
+    () => cache.get(t.id) ?? null,
+  );
+  useEffect(() => {
+    if (local) return;
+    const hit = cache.get(t.id);
+    if (hit) {
+      setLive(hit);
+      return;
+    }
+    setLive(null);
+    let alive = true;
+    fetch(`/api/title?id=${encodeURIComponent(t.id)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: TitleDetails | null) => {
+        if (d) cache.set(t.id, d);
+        if (alive) setLive(d);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [t.id, local]);
+  if (local)
+    return { ...local, ratingSource: "IMDb", similar: similarTo(local, 12) };
+  return live;
+}
+
+const formatVotes = (k: number) =>
+  k >= 1000
+    ? `${(k / 1000).toFixed(1)}M`
+    : k >= 1
+      ? `${Math.round(k)}K`
+      : `${Math.round(k * 1000)}`;
 
 interface Props {
   title: Title;
   reason?: string;
   saved: (id: string) => boolean;
-  onToggle: (id: string) => void;
+  onToggle: (t: Title) => void;
   onOpen: (t: Title) => void;
   onPerson: (name: string) => void;
   onShare: (t: Title) => void;
@@ -36,7 +77,7 @@ interface Props {
 }
 
 export function TitleModal({
-  title: t,
+  title: base,
   reason,
   saved,
   onToggle,
@@ -45,8 +86,10 @@ export function TitleModal({
   onShare,
   onClose,
 }: Props) {
-  const art = usePoster(t.id);
-  const similar = useMemo(() => similarTo(t, 12), [t]);
+  const d = useDetails(base);
+  const t: Title = d ?? base;
+  const looked = usePoster(t.id, !t.poster);
+  const art = t.backdrop ?? t.poster ?? looked;
   const panel = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -67,7 +110,8 @@ export function TitleModal({
   }, [t.id]);
 
   const isSaved = saved(t.id);
-  const people = [...(t.director ? [t.director] : []), ...t.cast];
+  const source = t.ratingSource ?? "IMDb";
+  const people = [...(t.director ? t.director.split(", ") : []), ...t.cast];
 
   return (
     <div
@@ -100,28 +144,32 @@ export function TitleModal({
             <Poster title={t} className="modal-poster" />
             <div className="modal-info">
               <p className="eyebrow">
-                {kindLabel(t)} · {t.year} · {FLAGS[t.country]}{" "}
-                {COUNTRY_SHORT[t.country] ?? t.country}
+                {kindLabel(t)} · {t.year}
+                {d?.runtime ? ` · ${d.runtime}` : ""} · {flag(t.country)}{" "}
+                {countryName(t.country)}
               </p>
               <h2 id="modal-title">{t.title}</h2>
               <div className="modal-stats">
-                <span className="imdb">
-                  <IconStar size={14} /> {t.rating.toFixed(1)}{" "}
-                  <small>IMDb</small>
-                </span>
-                <span>
-                  {t.votes >= 1000
-                    ? `${(t.votes / 1000).toFixed(1)}M`
-                    : `${t.votes}K`}{" "}
-                  ratings
-                </span>
+                {d?.imdbRating !== undefined && source !== "IMDb" && (
+                  <span className="imdb">
+                    <IconStar size={14} /> {d.imdbRating.toFixed(1)}{" "}
+                    <small>IMDb</small>
+                  </span>
+                )}
+                {t.rating > 0 && (
+                  <span className={source === "IMDb" ? "imdb" : "score"}>
+                    <IconStar size={14} /> {t.rating.toFixed(1)}{" "}
+                    <small>{source}</small>
+                  </span>
+                )}
+                {t.votes > 0 && <span>{formatVotes(t.votes)} ratings</span>}
               </div>
               {reason && <p className="modal-reason">{reason}</p>}
               <p className="modal-blurb">{t.blurb}</p>
               <div className="modal-actions">
                 <a
                   className="btn btn-primary"
-                  href={trailerURL(t)}
+                  href={d?.trailer ?? trailerURL(t)}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
@@ -131,14 +179,18 @@ export function TitleModal({
                   type="button"
                   className={`btn btn-glass ${isSaved ? "on" : ""}`}
                   aria-pressed={isSaved}
-                  onClick={() => onToggle(t.id)}
+                  onClick={() => onToggle(t)}
                 >
                   {isSaved ? <IconCheck size={18} /> : <IconPlus size={18} />}{" "}
                   {isSaved ? "In My List" : "My List"}
                 </button>
                 <a
                   className="btn btn-glass"
-                  href={imdbURL(t)}
+                  href={
+                    d?.imdbId
+                      ? `https://www.imdb.com/title/${d.imdbId}/`
+                      : imdbURL(t)
+                  }
                   target="_blank"
                   rel="noopener noreferrer"
                 >
@@ -161,18 +213,20 @@ export function TitleModal({
           <dl className="modal-facts">
             <div>
               <dt>{t.kind === "movie" ? "Director" : "Created by"}</dt>
-              <dd>{t.director || "—"}</dd>
+              <dd>{t.director || (d ? "—" : "…")}</dd>
             </div>
             <div>
               <dt>Genres</dt>
               <dd>{t.genres.join(", ")}</dd>
             </div>
-            <div>
-              <dt>Feels</dt>
-              <dd>{t.tags.map((x) => TAG_LABELS[x] ?? x).join(", ")}</dd>
-            </div>
+            {source === "IMDb" && (
+              <div>
+                <dt>Feels</dt>
+                <dd>{t.tags.map((x) => TAG_LABELS[x] ?? x).join(", ")}</dd>
+              </div>
+            )}
           </dl>
-          {people.length > 0 && (
+          {people.length > 0 ? (
             <div className="people">
               <h3>Cast &amp; crew</h3>
               <div className="people-list">
@@ -188,19 +242,33 @@ export function TitleModal({
                 ))}
               </div>
             </div>
+          ) : (
+            !d && <div className="skeleton line" aria-hidden />
           )}
           <h3 className="more-title">More like this</h3>
-          <div className="grid compact">
-            {similar.map((s) => (
-              <TitleCard
-                key={s.id}
-                title={s}
-                saved={saved(s.id)}
-                onOpen={onOpen}
-                onToggle={onToggle}
-              />
-            ))}
-          </div>
+          {d ? (
+            d.similar.length ? (
+              <div className="grid compact">
+                {d.similar.map((s) => (
+                  <TitleCard
+                    key={s.id}
+                    title={s}
+                    saved={saved(s.id)}
+                    onOpen={onOpen}
+                    onToggle={onToggle}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="muted">No recommendations for this one yet.</p>
+            )
+          ) : (
+            <div className="grid compact" aria-busy="true">
+              {Array.from({ length: 6 }, (_, i) => (
+                <div key={i} className="skeleton" />
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

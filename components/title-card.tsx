@@ -11,7 +11,7 @@ interface Props {
   rank?: number;
   saved: boolean;
   onOpen: (t: Title) => void;
-  onToggle: (id: string) => void;
+  onToggle: (t: Title) => void;
 }
 
 export function TitleCard({
@@ -52,7 +52,7 @@ export function TitleCard({
             ? `Remove ${title.title} from My List`
             : `Add ${title.title} to My List`
         }
-        onClick={() => onToggle(title.id)}
+        onClick={() => onToggle(title)}
       >
         {saved ? <IconCheck size={16} /> : <IconPlus size={16} />}
       </button>

@@ -16,7 +16,8 @@ export function Poster({
   title: Title;
   className?: string;
 }) {
-  const url = usePoster(title.id);
+  const looked = usePoster(title.id, !title.poster);
+  const url = title.poster ?? looked;
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
   const length = title.title.length;

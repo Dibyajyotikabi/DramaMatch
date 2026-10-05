@@ -29,47 +29,26 @@ export function hueFor(t: Title) {
   return base + (h % 26) - 13;
 }
 
-export const FLAGS: Record<string, string> = {
-  US: "🇺🇸",
-  UK: "🇬🇧",
-  IE: "🇮🇪",
-  KR: "🇰🇷",
-  CN: "🇨🇳",
-  TW: "🇹🇼",
-  HK: "🇭🇰",
-  JP: "🇯🇵",
-  IN: "🇮🇳",
-  FR: "🇫🇷",
-  ES: "🇪🇸",
-  DE: "🇩🇪",
-  IT: "🇮🇹",
-  MX: "🇲🇽",
-  BR: "🇧🇷",
-  DK: "🇩🇰",
-  IR: "🇮🇷",
-  AU: "🇦🇺",
-};
+/** Emoji flag from a two-letter country code ("UK" is stored for Britain). */
+export function flag(code: string) {
+  const c = code === "UK" ? "GB" : code;
+  if (!/^[A-Z]{2}$/.test(c)) return "🌐";
+  return String.fromCodePoint(
+    ...[...c].map((ch) => 0x1f1e6 + ch.charCodeAt(0) - 65),
+  );
+}
 
-export const COUNTRY_SHORT: Record<string, string> = {
-  US: "USA",
-  UK: "UK",
-  IE: "Ireland",
-  KR: "South Korea",
-  CN: "China",
-  TW: "Taiwan",
-  HK: "Hong Kong",
-  JP: "Japan",
-  IN: "India",
-  FR: "France",
-  ES: "Spain",
-  DE: "Germany",
-  IT: "Italy",
-  MX: "Mexico",
-  BR: "Brazil",
-  DK: "Denmark",
-  IR: "Iran",
-  AU: "Australia",
-};
+let regionNames: Intl.DisplayNames | null = null;
+export function countryName(code: string) {
+  const c = code === "UK" ? "GB" : code;
+  try {
+    regionNames ??= new Intl.DisplayNames(["en"], { type: "region" });
+    const n = regionNames.of(c) ?? code;
+    return n === "United States" ? "USA" : n === "United Kingdom" ? "UK" : n;
+  } catch {
+    return code;
+  }
+}
 
 export const trailerURL = (t: Title) =>
   `https://www.youtube.com/results?search_query=${encodeURIComponent(`${t.title} ${t.year} official trailer`)}`;
