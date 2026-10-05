@@ -24,11 +24,11 @@ If port 3000 is busy: `npm run dev -- --port 3100`.
 
 1. Create a free account at [themoviedb.org](https://www.themoviedb.org/signup).
 2. Go to **Settings → API**, request an API key (choose "Developer"), and copy the **API Key**.
-3. Put it in `.env.local`:
-   ```
-   TMDB_API_KEY=your_key_here
-   ```
-4. Check it with `npm run check:tmdb`, then restart `npm run dev`.
+3. With `npm run dev` running, click **Connect API** in the top bar, paste the key and press **Test & save**. The app checks the key, saves it to `.env.local` and switches to live data straight away.
+
+   Prefer files? Put `TMDB_API_KEY=your_key_here` in `.env.local` and restart. `npm run check:tmdb` verifies it.
+
+The Connect API box only appears while you run the app on your own computer (development mode, localhost). Visitors to a deployed site never see it; set keys in your host's environment variables instead. To allow it on your own production server, set `ALLOW_SETUP=1` (it still accepts only requests from that machine).
 
 Optional: add `OMDB_API_KEY` (free at [omdbapi.com](https://www.omdbapi.com/apikey.aspx)) to show the real IMDb rating on title pages. Live lists and filters use TMDB's audience rating, which is labelled "TMDB".
 

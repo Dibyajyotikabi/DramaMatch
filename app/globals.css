@@ -1870,3 +1870,202 @@ h1 em {
   font-size: 12.5px;
   color: var(--dim);
 }
+
+/* ───────────── API setup ───────────── */
+
+.nav-links .api-pill {
+  gap: 8px;
+  margin-left: 6px;
+  border: 1px solid rgb(229 48 60 / 0.55);
+  color: var(--ink);
+  background: rgb(229 48 60 / 0.12);
+}
+
+.nav-links .api-pill:hover {
+  background: rgb(229 48 60 / 0.22);
+}
+
+.nav-links .api-pill.on {
+  border-color: rgb(74 222 128 / 0.45);
+  background: rgb(74 222 128 / 0.1);
+}
+
+.api-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--red);
+  box-shadow: 0 0 10px var(--red);
+}
+
+.api-pill.on .api-dot {
+  background: #4ade80;
+  box-shadow: 0 0 10px #4ade80;
+}
+
+.setup {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: 100%;
+  max-width: 560px;
+  margin-top: 8vh;
+  padding: 32px;
+  border: 1px solid var(--line-strong);
+  border-radius: 22px;
+  background:
+    radial-gradient(90% 60% at 0% 0%, rgb(229 48 60 / 0.16), transparent 70%),
+    var(--bg-raise);
+  box-shadow: 0 40px 120px rgb(0 0 0 / 0.7);
+  animation: pop 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.setup h2 {
+  margin: -8px 0 0;
+  font-family: var(--display);
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+
+.setup-lede,
+.setup-fine {
+  margin: 0;
+  color: var(--muted);
+}
+
+.setup-fine {
+  font-size: 13px;
+  color: var(--dim);
+}
+
+.setup code {
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: rgb(255 255 255 / 0.08);
+  color: var(--ink);
+  font-size: 0.9em;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.field-label {
+  font-weight: 650;
+}
+
+.field-label em {
+  margin-left: 6px;
+  font-style: normal;
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.field-box {
+  display: flex;
+  align-items: center;
+  height: 52px;
+  padding: 0 6px 0 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  background: var(--card);
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
+}
+
+.field-box:focus-within {
+  border-color: rgb(229 48 60 / 0.7);
+  box-shadow: 0 0 0 4px rgb(229 48 60 / 0.15);
+}
+
+.field-box.bad {
+  border-color: #ff6b6b;
+}
+
+.field-box input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 15px;
+}
+
+.field-box input::placeholder {
+  font-family: var(--body);
+  color: var(--dim);
+}
+
+.field-toggle {
+  height: 38px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: rgb(255 255 255 / 0.07);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.field-help {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: fit-content;
+  font-size: 13px;
+  color: var(--ember);
+  text-decoration: none;
+}
+
+.field-help:hover {
+  text-decoration: underline;
+}
+
+.setup-msg {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 560;
+}
+
+.setup-msg.bad {
+  background: rgb(255 107 107 / 0.12);
+  color: #ffb4b4;
+}
+
+.setup-msg.good {
+  background: rgb(74 222 128 / 0.12);
+  color: #a7f3c0;
+}
+
+.setup-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.setup .btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+@media (max-width: 720px) {
+  .setup {
+    margin-top: 0;
+    min-height: 100dvh;
+    border-radius: 0;
+    padding: 64px 18px 32px;
+  }
+}

@@ -12,6 +12,7 @@ import {
 } from "./icons";
 import { Poster } from "./poster";
 import { Row } from "./row";
+import { SetupBox } from "./setup-box";
 import { SearchBox, type SearchBoxHandle } from "./search-box";
 import { TitleCard } from "./title-card";
 import { TitleModal } from "./title-modal";
@@ -89,6 +90,10 @@ export function App({ home }: { home: Home }) {
     null,
   );
   const [toast, setToast] = useState("");
+  const [setup, setSetup] = useState<{ allowed: boolean; open: boolean }>({
+    allowed: false,
+    open: false,
+  });
   const [scrolled, setScrolled] = useState(false);
   const list = useList();
   const search = useRef<SearchBoxHandle>(null);
@@ -365,6 +370,17 @@ export function App({ home }: { home: Home }) {
   /* ───────── Effects ───────── */
 
   useEffect(() => {
+    fetch("/api/setup")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d?.allowed) return;
+        const ask = new URLSearchParams(window.location.search).has("setup");
+        setSetup({ allowed: true, open: ask });
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
@@ -496,6 +512,16 @@ export function App({ home }: { home: Home }) {
             <IconShuffle size={16} />{" "}
             <span className="hide-sm">Surprise me</span>
           </button>
+          {setup.allowed && (
+            <button
+              type="button"
+              className={`api-pill ${home.live ? "on" : ""}`}
+              onClick={() => setSetup({ allowed: true, open: true })}
+            >
+              <span className="api-dot" aria-hidden />
+              {home.live ? "Live" : "Connect API"}
+            </button>
+          )}
         </div>
       </nav>
 
@@ -942,6 +968,13 @@ export function App({ home }: { home: Home }) {
           }}
           onShare={shareTitle}
           onClose={closeTitle}
+        />
+      )}
+
+      {setup.open && (
+        <SetupBox
+          live={home.live}
+          onClose={() => setSetup({ allowed: true, open: false })}
         />
       )}
 
