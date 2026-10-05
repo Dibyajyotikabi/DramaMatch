@@ -8,6 +8,7 @@ import {
   IconSpark,
   IconWand,
   Logo,
+  MoodIcon,
 } from "./icons";
 import { Poster } from "./poster";
 import { Row } from "./row";
@@ -516,11 +517,6 @@ export function App({ home }: { home: Home }) {
         </div>
         <div className="hero-shade" aria-hidden />
         <div className="hero-inner">
-          {!compact && (
-            <p className="eyebrow hero-eyebrow">
-              <span className="dot" /> Mood in. Movie out.
-            </p>
-          )}
           <h1>
             How are you <em>feeling</em> tonight?
           </h1>
@@ -546,7 +542,7 @@ export function App({ home }: { home: Home }) {
                   className="chip"
                   onClick={() => start(m.value)}
                 >
-                  <span aria-hidden>{m.emoji}</span> {m.label}
+                  <MoodIcon name={m.icon} /> {m.label}
                 </button>
               ))}
             </div>
@@ -649,7 +645,7 @@ export function App({ home }: { home: Home }) {
                             className="option"
                             onClick={() => start(s.value)}
                           >
-                            {s.emoji} {s.label}
+                            <MoodIcon name={s.icon} size={16} /> {s.label}
                           </button>
                         ))}
                       </div>

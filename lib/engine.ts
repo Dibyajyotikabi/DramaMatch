@@ -1093,6 +1093,8 @@ export interface Suggestion {
   label: string;
   detail: string;
   value: string;
+  /** Mood icon key, for mood suggestions. */
+  icon?: string;
   /** True when this is a typo-tolerant guess rather than a literal match. */
   fuzzy?: boolean;
   id?: string;
@@ -1100,22 +1102,26 @@ export interface Suggestion {
 
 export const MOOD_SUGGESTIONS = [
   {
-    emoji: "🥲",
+    icon: "low",
     label: "I'm feeling low",
     value: "I'm feeling sad, cheer me up",
   },
-  { emoji: "😂", label: "Make me laugh", value: "something funny" },
-  { emoji: "💘", label: "In a romantic mood", value: "romantic" },
-  { emoji: "😱", label: "Scare me", value: "scary horror" },
-  { emoji: "🤯", label: "Blow my mind", value: "mind-bending twists" },
-  { emoji: "☕", label: "Cozy & calm", value: "cozy and relaxing" },
-  { emoji: "😭", label: "Need a good cry", value: "a tearjerker to cry" },
-  { emoji: "🔥", label: "Adrenaline", value: "action packed adrenaline" },
-  { emoji: "🌸", label: "K-drama night", value: "romantic k-drama" },
-  { emoji: "🎬", label: "Bollywood", value: "feel-good bollywood" },
-  { emoji: "✨", label: "Anime magic", value: "anime" },
-  { emoji: "🌟", label: "Inspire me", value: "inspiring true story" },
-];
+  { icon: "laugh", label: "Make me laugh", value: "something funny" },
+  { icon: "love", label: "In a romantic mood", value: "romantic" },
+  { icon: "scare", label: "Scare me", value: "scary horror" },
+  { icon: "mind", label: "Blow my mind", value: "mind-bending twists" },
+  { icon: "cozy", label: "Cozy & calm", value: "cozy and relaxing" },
+  { icon: "cry", label: "Need a good cry", value: "a tearjerker to cry" },
+  {
+    icon: "adrenaline",
+    label: "Adrenaline",
+    value: "action packed adrenaline",
+  },
+  { icon: "kdrama", label: "K-drama night", value: "romantic k-drama" },
+  { icon: "bollywood", label: "Bollywood", value: "feel-good bollywood" },
+  { icon: "anime", label: "Anime magic", value: "anime" },
+  { icon: "inspire", label: "Inspire me", value: "inspiring true story" },
+] as const;
 
 export function suggest(
   query: string,
@@ -1195,7 +1201,8 @@ export function suggest(
     if (n.includes(q))
       push(`m:${m.label}`, {
         type: "mood",
-        label: `${m.emoji} ${m.label}`,
+        label: m.label,
+        icon: m.icon,
         detail: "Mood",
         value: m.value,
         rank: 1.5,

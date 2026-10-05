@@ -15,6 +15,7 @@ import {
   IconPerson,
   IconSearch,
   IconSpark,
+  MoodIcon,
 } from "./icons";
 import { Poster } from "./poster";
 import { titleById } from "@/lib/catalog";
@@ -278,6 +279,8 @@ export const SearchBox = forwardRef<SearchBoxHandle, Props>(function SearchBox(
                   <span className={`suggest-icon ${s.type}`} aria-hidden>
                     {s.type === "person" ? (
                       <IconPerson size={18} />
+                    ) : s.icon ? (
+                      <MoodIcon name={s.icon} />
                     ) : (
                       <IconSpark size={16} />
                     )}

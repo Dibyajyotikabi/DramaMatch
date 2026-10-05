@@ -1,3 +1,19 @@
+import {
+  Atom,
+  Clapperboard,
+  CloudSun,
+  Coffee,
+  Droplet,
+  Flame,
+  Ghost,
+  Heart,
+  Laugh,
+  MoonStar,
+  Sunrise,
+  WandSparkles,
+  type LucideIcon,
+} from "lucide-react";
+
 const base = {
   width: 20,
   height: 20,
@@ -131,5 +147,34 @@ export function Logo({ size = 30 }: P) {
       <path d="M18 14.5v19l15.5-9.5z" fill="#fff" />
       <circle cx="35.5" cy="12.5" r="3.2" fill="#ffc94d" />
     </svg>
+  );
+}
+
+const MOODS: Record<string, LucideIcon> = {
+  low: CloudSun,
+  laugh: Laugh,
+  love: Heart,
+  scare: Ghost,
+  mind: Atom,
+  cozy: Coffee,
+  cry: Droplet,
+  adrenaline: Flame,
+  kdrama: MoonStar,
+  bollywood: Clapperboard,
+  anime: WandSparkles,
+  inspire: Sunrise,
+};
+
+/** Line icon for a mood chip (Lucide, ISC licence). */
+export function MoodIcon({ name, size = 18 }: { name: string; size?: number }) {
+  const Icon = MOODS[name] ?? WandSparkles;
+  return (
+    <Icon
+      size={size}
+      strokeWidth={1.75}
+      absoluteStrokeWidth
+      aria-hidden
+      className="mood-icon"
+    />
   );
 }

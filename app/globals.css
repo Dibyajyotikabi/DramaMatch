@@ -398,24 +398,6 @@ img {
   gap: 16px;
 }
 
-.hero-eyebrow {
-  padding: 7px 14px;
-  border: 1px solid var(--line-strong);
-  border-radius: 999px;
-  background: rgb(0 0 0 / 0.35);
-  backdrop-filter: blur(8px);
-  color: var(--ink);
-  animation: rise 0.7s ease both;
-}
-
-.dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--red);
-  box-shadow: 0 0 12px var(--red);
-}
-
 h1 {
   margin: 0;
   font-family: var(--display);
@@ -670,6 +652,26 @@ h1 em {
     transform 0.15s,
     border-color 0.2s,
     background 0.2s;
+}
+
+.chip .mood-icon {
+  flex: none;
+  color: var(--ember);
+  transition: color 0.2s;
+}
+
+.chip:hover .mood-icon {
+  color: #fff;
+}
+
+.option .mood-icon {
+  color: var(--ember);
+}
+
+.option {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
 }
 
 .chip:hover {
