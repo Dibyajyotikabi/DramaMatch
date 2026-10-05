@@ -29,9 +29,12 @@ async function main() {
     for (const r of d.results.slice(0, 5))
       console.log("  •", r.title ?? r.name);
   } catch (e) {
-    console.log("✗ TMDB rejected the request:", (e as Error).message);
+    const msg = (e as Error).message;
+    console.log("✗ TMDB request failed:", msg);
     console.log(
-      "  Check the key in .env.local. A v3 key goes in TMDB_API_KEY; a long read token goes in TMDB_READ_TOKEN.",
+      / 401$/.test(msg)
+        ? "  TMDB rejected the key. A v3 key goes in TMDB_API_KEY; a long read token goes in TMDB_READ_TOKEN."
+        : "  This usually means a network, firewall or proxy is blocking api.themoviedb.org, not a bad key.",
     );
     process.exit(1);
   }
